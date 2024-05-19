@@ -1,41 +1,60 @@
-﻿using System;
+﻿using booking_backend.Services;
+using Microsoft.Extensions.Options;
+using System;
 using System.Net;
 using System.Net.Mail;
+using System.Threading.Tasks;
 
-public class EmailService
+public class EmailService : IEmailService
 {
-    public void SendEmail(string senderEmail, string senderName, string recipientEmail, string recipientName, string subject, string body)
+    private readonly EmailSettings _emailSettings;
+
+    public EmailService(IOptions<EmailSettings> emailSettings)
+    {
+        _emailSettings = emailSettings.Value;
+    }
+
+    public async Task SendEmailAsync(string toEmail, string subject, string content)
     {
         try
         {
-            var fromAddress = new MailAddress(senderEmail, senderName);
-            var toAddress = new MailAddress(recipientEmail, recipientName);
+            var fromAddress = new MailAddress(_emailSettings.Sender, _emailSettings.SenderName);
+            var toAddress = new MailAddress(toEmail);
 
-            const string fromPassword = "your-email-password";
-
-            var smtp = new SmtpClient
+            using (var smtp = new SmtpClient
             {
-                Host = "smtp.example.com",
-                Port = 587,
+                Host = _emailSettings.MailServer,
+                Port = _emailSettings.MailPort,
                 EnableSsl = true,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
                 UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(fromAddress.Address, fromPassword)
-            };
-
+                Credentials = new NetworkCredential(fromAddress.Address, _emailSettings.Password)
+            })
             using (var message = new MailMessage(fromAddress, toAddress)
             {
                 Subject = subject,
-                Body = body
+                Body = content,
+                IsBodyHtml = true
             })
             {
-                smtp.Send(message);
-                Console.WriteLine("E-postmeddelande skickat!");
+                await smtp.SendMailAsync(message);
+                Console.WriteLine("Thank you, your E-mail is send :)");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Ett fel uppstod: {ex.Message}");
+            Console.WriteLine($"A problem occured: {ex.Message}");
+            throw; // Lägg till för att bubbla upp undantaget om du vill hantera det på högre nivå
         }
     }
+}
+
+// EmailSettings-klass för att matcha appsettings.json-konfigurationen
+public class EmailSettings
+{
+    public string MailServer { get; set; }
+    public int MailPort { get; set; }
+    public string SenderName { get; set; }
+    public string Sender { get; set; }
+    public string Password { get; set; }
 }
